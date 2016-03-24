@@ -1,0 +1,400 @@
+---
+title: "Time Series Project"
+author: "Piyush Bhargava, Chuiyi Liu, Cong Qing, Meg Ellis"
+output: html_document
+---
+
+In the file “train.csv” you will find monthly data from January 1987 to December 2010 on the following variables:
+• Unemployment Rate
+• Population
+• Bankruptcy Rate
+• Housing Price Index
+
+***Choose Models***
+
+Loading the train dataset and looking at the time series plots.
+```{r, echo = TRUE, eval = TRUE}
+library(tseries, quietly = TRUE)
+library(lawstat, quietly = TRUE)
+library(forecast)
+
+train <- read.csv('/Users/tracy/msan-ts/project/train.csv', header=TRUE)
+par(mfrow=c(1,1))
+plot(train)
+
+head(train)
+UR <- ts(train$Unemployment_Rate)
+Pop <- ts(train$Population)
+BR <- ts(train$Bankruptcy_Rate)
+HPI <- ts(train$House_Price_Index)
+
+#plot the variables:
+par(mfrow=c(2,1))
+plot(UR)
+plot(Pop)
+par(mfrow=c(2,1))
+plot(BR)
+plot(HPI)
+```
+
+Looking at the plots and performing Augmented Dickey-Fuller Test for Bankruptcy rates and other time series above
+
+```{r, echo = TRUE}
+par(mfrow=c(1,1))
+plot(BR)
+acf(BR, lag.max = 120)
+ndiffs(BR)
+adf.test(BR)
+```
+
+The p-value from the ADF test is greater than 0.05 but the ACF plot indicates that the time series is not stationary. Hence, Differencing once and performing the Augmented Dickey-Fuller Test again. 
+
+```{r, echo = TRUE}
+BR.1 <- diff(BR)
+plot(BR.1, ylab = "Bankruptcy_rate")
+l.BR.1 <- diff(log(BR))
+adf.test(l.BR.1)
+par(mfrow=c(1,1))
+plot(l.BR.1, ylab = "Bankruptcy_rate")
+acf(l.BR.1, lag.max = 48)
+nsdiffs(log(BR),12)
+```
+
+Since the variation doesn't look constant, performing log transformation. This iteration passes the test easily, so we do not need to difference any further. Looking at the ACF plot, there seems to be monthly seasonality (period = 12) but the seasonal differencing may not be required. nsdiffs() also indicates that seasonal differencing is not required. Hence, choosing d=1, D=0, s=12. 
+
+Checking ACF and PACF to choose p, q, P, Q.
+```{r, echo = TRUE}
+#order selection:
+par(mfrow=c(2,1))
+acf(l.BR.1, lag.max = 120)
+pacf(l.BR.1, lag.max = 120)
+```
+
+Looking at ACF plot for q and Q, and PACF plot for p and P, maybe p = 2, q = 2, and P = 1, Q = 2 can be considered.
+Fitting the model using Least Squares (LS) as well as Maximum Likelihood (ML) estimation.
+```{r, echo = TRUE}
+
+m.ml.1 <- arima(log(BR), order = c(2,1,2), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ls.1 <- arima(log(BR), order = c(2,1,2), seasonal = list(order = c(1,0,2), period = 12), method = "CSS")
+m.ml.1
+m.ls.1
+```
+
+Since the estimates from ML and LS are similar, 'Normality' assumption seems reasonable. 
+
+MA(2) doesn't look significant since SE is high
+
+Now, fitting more models of lower orders using ML and using the output information such as Log likelihood, AIC and sigma^2 to select the model with the best fit. 
+
+```{r, echo = TRUE}
+m.ml.2 <- arima(log(BR), order = c(2,1,1), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ml.3 <- arima(log(BR), order = c(2,1,0), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ml.4 <- arima(log(BR), order = c(1,1,1), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ml.5 <- arima(log(BR), order = c(1,1,0), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ml.6 <- arima(log(BR), order = c(0,1,1), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ml.7 <- arima(log(BR), order = c(0,1,0), seasonal = list(order = c(1,0,2), period = 12), method = "ML")
+m.ml.8 <- arima(log(BR), order = c(2,1,1), seasonal = list(order = c(1,0,1), period = 12), method = "ML")
+m.ml.9 <- arima(log(BR), order = c(2,1,0), seasonal = list(order = c(1,0,1), period = 12), method = "ML")
+m.ml.10 <- arima(log(BR), order = c(1,1,1), seasonal = list(order = c(1,0,1), period = 12), method = "ML")
+m.ml.11 <- arima(log(BR), order = c(1,1,0), seasonal = list(order = c(1,0,1), period = 12), method = "ML")
+m.ml.12 <- arima(log(BR), order = c(0,1,1), seasonal = list(order = c(1,0,1), period = 12), method = "ML")
+m.ml.13 <- arima(log(BR), order = c(0,1,0), seasonal = list(order = c(1,0,1), period = 12), method = "ML")
+sigma2<-c(m.ml.1$sigma2,m.ml.2$sigma2,m.ml.3$sigma2,m.ml.4$sigma2,m.ml.5$sigma2,m.ml.6$sigma2,m.ml.7$sigma2,m.ml.8$sigma2,m.ml.9$sigma2,m.ml.10$sigma2,m.ml.11$sigma2,m.ml.12$sigma2,m.ml.13$sigma2)
+loglik<-c(m.ml.1$loglik,m.ml.2$loglik,m.ml.3$loglik,m.ml.4$loglik,m.ml.5$loglik,m.ml.6$loglik,m.ml.7$loglik,m.ml.8$loglik,m.ml.9$loglik,m.ml.10$loglik,m.ml.11$loglik,m.ml.12$loglik,m.ml.13$loglik)
+AIC<-c(m.ml.1$aic,m.ml.2$aic,m.ml.3$aic,m.ml.4$aic,m.ml.5$aic,m.ml.6$aic,m.ml.7$aic,m.ml.8$aic,m.ml.9$aic,m.ml.10$aic,m.ml.11$aic,m.ml.12$aic,m.ml.13$aic)
+d <- data.frame(sigma2,loglik,AIC)
+d
+
+```
+
+Comparing the values of Log Likelihood, AIC and sigma^2, it can be seen that the model m2 - (2,1,1) X (1,0,2) performs significantly better than other models. Compared to other models, the model has higher values of Log Likelihood and lower values for AIC and sigma^2.  
+
+Using appropriate formal and informal residual diagnostics, investigating whether
+m2 - (2,1,1) X (1,0,2) satisfies the following assumptions:
+
+i. Zero-Mean
+
+```{r, echo = TRUE}
+# Calculating Residuals
+e <- m.ml.2$residuals # residuals
+r <- e/sqrt(m.ml.2$sigma2) # standardized residuals
+
+par(mfrow=c(2,1))
+plot(e, main="Residuals vs t", ylab="")
+abline(h=0, col="red")
+plot(r, main="Standardized Residuals vs t", ylab="")
+abline(h=0, col="red")
+
+# test whether residuals have zero mean
+t.test(e)
+```
+
+The Zero-mean assumption seems satisfied using Informal residual diagnostics (Residuals / Standardized Residuals vs time plot). The p-value for the formal test (T-test) comes out to be greater than 0.05. Hence, we fail to reject the null hypothesis that the expected value / true mean of residuals is equal to zero.
+
+
+ii. Homoscedasticity 
+
+```{r, echo = TRUE}
+par(mfrow=c(1,1))
+# 4 groups
+plot(e, main="Residuals vs t", ylab="")
+abline(v=c(0,72,144,216,288), lwd=3, col="red")
+group <- c(rep(1,72),rep(2,72), rep(3,72), rep(4,72))
+levene.test(e,group) #Levene
+bartlett.test(e,group) #Bartlett   
+
+# 3 groups
+plot(e, main="Residuals vs t", ylab="")
+abline(v=c(0,96,192,288), lwd=3, col="red")
+group <- c(rep(1,96),rep(2,96), rep(3,96))
+levene.test(e,group) #Levene
+bartlett.test(e,group) #Bartlett   
+```
+
+The Homoscedasticity assumption seems fine after taking the log. The assumption is also confirmed by Levene's and Bartlett's test.
+
+
+iii. Zero-Correlation 
+
+```{r, echo = TRUE}
+tsdiag(m.ml.2) #ACF and Ljung-Box test all in one!
+runs.test(e) #Runs test for randomness
+```
+
+The p-value for the formal 'Ljung-Box' test comes out to be less than 0.05 only for lags 9 and 10. For other lags, p-values are fine. The p-value for the formal 'Runs' test comes out to be greater than 0.05. Hence, we fail to reject the null hypothesis that the residuals are uncorrelated.
+
+
+iv. Normality
+
+```{r, echo = TRUE}
+par(mfrow=c(1,1))
+qqnorm(e, main="QQ-plot of Residuals")
+qqline(e)
+shapiro.test(e) #SW test
+```
+
+Informal residual diagnostics (QQ Plot) indicates that the Normality assumption is  valid as the sample quantiles mirror theroretical quantiles. The p-value for the formal test (Shapiro Wilk test) comes out to be greater than 0.05. Hence, we fail to reject the null hypothesis that the residuals are normally distributed.
+
+All the residuals diagnostics are satisfied for our chosen SARIMA model of Bankruptcy rates. We proceed to include co-variates in this model.
+
+Looking at the correlations between co-variates and bankruptcy rates:
+```{r, echo = TRUE}
+cor(data.frame(BR, UR, Pop, HPI))
+```
+
+Bankruptcy rate is highly correlated with population and HPI. Population is always on a constantly increasing trend and hence would not add any value in predicting Bankruptcy rate. So, population is excluded. Including both, HPI and Unemployment rate as co-variates in the SARIMA model and estimating the model equation again:
+
+```{r, echo = TRUE}
+#Fit an SARIMA(2,1,1) X (1,0,2) s=12 model with covariate information
+m.co.1 <- arima(log(BR), order = c(2,1,1), seasonal = list(order = c(1,0,2), period = 12), xreg = data.frame(UR, HPI))
+m.co.1
+```
+
+
+The coefficient for Unemployment rate is not different than zero statistically since 95% confidence limit for coefficient includes zero. So, excluding Unemployment rate and estimating the model equation again:  
+
+```{r, echo = TRUE}
+m.co.2 <- arima(log(BR), order = c(2,1,1), seasonal = list(order = c(1,0,2), period = 12), xreg = data.frame(HPI))
+m.co.2
+```
+
+
+The model looks better than only SARIMA model. The statistics such as Log Likelihood, AIC and sigma^2 are better than only SARIMA model. All the coefficients including HPI's are significant. Hence, we finalise this model and perform residual diagnostics. 
+
+Using appropriate formal and informal residual diagnostics, investigating whether
+SARIMA(2,1,1) X (1,0,2) s=12 model with HPI as covariate satisfies the following assumptions:
+
+i. Zero-Mean
+
+```{r, echo = TRUE}
+# Calculating Residuals
+e <- m.co.2$residuals # residuals
+r <- e/sqrt(m.co.2$sigma2) # standardized residuals
+
+par(mfrow=c(2,1))
+plot(e, main="Residuals vs t", ylab="")
+abline(h=0, col="red")
+plot(r, main="Standardized Residuals vs t", ylab="")
+abline(h=0, col="red")
+
+# test whether residuals have zero mean
+t.test(e)
+```
+
+The Zero-mean assumption seems satisfied using Informal residual diagnostics (Residuals / Standardized Residuals vs time plot). The p-value for the formal test (T-test) comes out to be greater than 0.05. Hence, we fail to reject the null hypothesis that the expected value / true mean of residuals is equal to zero.
+
+
+ii. Homoscedasticity 
+
+```{r, echo = TRUE}
+par(mfrow=c(1,1))
+
+# 4 groups
+plot(e, main="Residuals vs t", ylab="")
+abline(v=c(0,72,144,216,288), lwd=3, col="red")
+group <- c(rep(1,72),rep(2,72), rep(3,72), rep(4,72))
+levene.test(e,group) #Levene
+bartlett.test(e,group) #Bartlett   
+
+# 3 groups
+plot(e, main="Residuals vs t", ylab="")
+abline(v=c(0,96,192,288), lwd=3, col="red")
+group <- c(rep(1,96),rep(2,96), rep(3,96))
+levene.test(e,group) #Levene
+bartlett.test(e,group) #Bartlett   
+```
+
+The Homoscedasticity assumption seems fine after including HPI. The assumption is also confirmed by Levene's and Bartlett's test using 2 different group sizes.
+
+
+iii. Zero-Correlation 
+
+```{r, echo = TRUE}
+tsdiag(m.co.2) #ACF and Ljung-Box test all in one!
+runs.test(e) #Runs test for randomness
+```
+
+The p-value for the formal 'Ljung-Box' test comes out to be less than 0.05 only for lags 9 and 10. For other lags, p-values are fine. The p-value for the formal 'Runs' test comes out to be greater than 0.05. Hence, we fail to reject the null hypothesis that the residuals are uncorrelated.
+
+
+iv. Normality
+
+```{r, echo = TRUE}
+par(mfrow=c(1,1))
+qqnorm(e, main="QQ-plot of Residuals")
+qqline(e)
+shapiro.test(e) #SW test
+```
+
+Informal residual diagnostics (QQ Plot) indicates that the Normality assumption is  valid as the sample quantiles mirror theroretical quantiles except for few deviations at the tail. The p-value for the formal test (Shapiro Wilk test) comes out to be greater than 0.05. Hence, we fail to reject the null hypothesis that the residuals are normally distributed.
+
+All the residuals diagnostics are satisfied for our chosen SARIMA model with HPI as a covariate.
+
+Now, we look at the RMSE (root-mean-square error) for the chosen SARIMA model with and without HPI as a covariate. For this, we train our model on 90% data points and test our model on the remaining 10% data points and measure the error in prediction.
+
+```{r}
+train.index <- c(1:round(0.9*length(BR)))
+BR.test <- BR[-train.index]
+BR.train <- BR[train.index]
+HPI.test <- HPI[-train.index]
+HPI.train <- HPI[train.index]
+
+l.BR.test <- log(BR.test)
+l.BR.train <- log(BR.train)
+l.HPI.test <- log(HPI.test)
+l.HPI.train <- log(HPI.train)
+
+pred.result <- c()
+pred.result.df <- data.frame()
+for(i in 1:length(BR.test)){
+    m.3 <- arima(l.BR.train, order = c(2,1,1), 
+                    seasonal = list(order = c(1,0,2), period = 12))
+    pred.l.BR <- predict(m.3, n.ahead = 1)$pred
+    se <- predict(m.3, n.ahead = 1)$se
+    upper <- pred.l.BR + 1.96*se
+    lower <- pred.l.BR - 1.96*se
+    l.BR.train <- c(l.BR.train, pred.l.BR)
+    pred.result <- c(pred.l.BR, lower, upper)
+    pred.result.df <- rbind(pred.result.df, pred.result)
+    
+}
+pred.result.3 <- exp(pred.result.df)
+names(pred.result.3) <- c("lower", "mean", "upper")
+rmse.3 <- sqrt(mean(pred.result.3$mean - BR.test)^2) 
+rmse.3
+```
+
+Then let's take a look at the model with covariate HPI. We choose the log of HPI because log(HPI) has higher correlation with BR than HPI.
+
+```{r}
+l.BR.test <- log(BR.test)
+l.BR.train <- log(BR.train)
+l.HPI.test <- log(HPI.test)
+l.HPI.train <- log(HPI.train)
+
+pred.result <- c()
+pred.result.df <- data.frame()
+for(i in 1:length(BR.test)){
+    m.co.3 <- arima(l.BR.train, order = c(2,1,1), 
+                    seasonal = list(order = c(1,0,2), period = 12), 
+                    xreg = data.frame(l.HPI.train))
+    pred.l.BR <- predict(m.co.3, n.ahead = 1, newxreg = l.HPI.test[i])$pred
+    se <- predict(m.co.3, n.ahead = 1, newxreg = l.HPI.test[i])$se
+    upper <- pred.l.BR + 1.96*se
+    lower <- pred.l.BR - 1.96*se
+    l.BR.train<- c(l.BR.train, pred.l.BR)
+    l.HPI.train <- c(l.HPI.train, l.HPI.test[i])
+    pred.result <- c(lower, pred.l.BR, upper)
+    pred.result.df <- rbind(pred.result.df, pred.result)
+    
+}
+pred.result.c <- exp(pred.result.df)
+names(pred.result.c) <- c("lower", "mean", "upper")
+rmse.c <- sqrt(mean(pred.result.c$mean - BR.test)^2)
+rmse.c
+```
+
+
+SARIMA model with HPI as a covariate has a lower RMSE than an only SARIMA model. So, we choose SARIMA model with HPI as a covariate for forecasting
+
+***Prediction***
+
+Loading the test dataset
+```{r, echo = TRUE}
+test <- read.csv('/Users/tracy/msan-ts/project/test.csv', header = TRUE)
+train <- read.csv('/Users/tracy/msan-ts/project/train.csv', header=TRUE)
+```
+
+
+Now, we forecast Bankruptcy rates using the chosen model. We use the rolling window to make the predictions.
+
+```{r}
+BR.train <- train$Bankruptcy_Rate
+l.BR.train <- log(BR.train)
+
+HPI.train <- train$House_Price_Index
+l.HPI.train <- log(HPI.train)
+
+HPI.test <- test$House_Price_Index
+l.HPI.test <- log(HPI.test)
+
+HPI <- ts(train$House_Price_Index)
+
+pred.result.df <- data.frame()
+for(i in 1:length(HPI.test)){
+    m.co.3 <- arima(l.BR.train, order = c(2,1,1), 
+                    seasonal = list(order = c(1,0,2), period = 12), 
+                    xreg = data.frame(l.HPI.train))
+    pred.l.BR <- predict(m.co.3, n.ahead = 1, newxreg = l.HPI.test[i])$pred
+    se <- predict(m.co.3, n.ahead = 1, newxreg = l.HPI.test[i])$se
+    upper <- pred.l.BR + 1.96*se
+    lower <- pred.l.BR - 1.96*se
+    l.BR.train<- c(l.BR.train, pred.l.BR)
+    l.HPI.train <- c(l.HPI.train, l.HPI.test[i])
+    pred.result <- c(pred.l.BR, lower, upper)
+    pred.result.df <- rbind(pred.result.df, pred.result)
+    
+}
+pred.result.c <- exp(pred.result.df)
+names(pred.result.c) <- c("mean", "lower", "upper")
+
+BR.train <- as.ts(BR.train)
+t.test <- c(289:300)
+```
+
+Plot the prediction of bankruptcy.
+
+```{r}
+par(mfrow=c(1,1))
+plot(BR.train, xlim=c(1,300), ylim=c(0,0.05), ylab = "Bankruptcy", main = "Prediction of Bankruptcy")
+
+lines(pred.result.c$mean~t.test, col='red')
+lines(pred.result.c$lower~t.test, col='blue')
+lines(pred.result.c$upper~t.test, col='blue')
+abline(v=289, lty=2)
+```
+
+The prediction results.
+```{r}
+pred.result.c
+```

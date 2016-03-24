@@ -1,0 +1,50 @@
+---
+title: "Exponential Smoothing"
+author: "Cong Qing"
+date: "December 5, 2015"
+output: html_document
+---
+
+
+```{r, echo = TRUE, eval = TRUE}
+library(tseries, quietly = TRUE)
+library(lawstat, quietly = TRUE)
+library(forecast)
+#train <- read.csv('~/Desktop/Fall 2015 - 2/MSAN 604 - Time series/Project/train.csv', header=TRUE)
+train <- read.csv('train-2.csv', header=TRUE)
+BR <- ts(train$Bankruptcy_Rate)
+# split into training and test sets
+train.tr <- train[1:276,] #training set
+train.te <- train[277:288,] #test set
+UR.tr <- ts(train.tr$Unemployment_Rate)
+Pop.tr <- ts(train.tr$Population)
+BR.tr <- ts(train.tr$Bankruptcy_Rate)
+
+l_BR <- log(BR.tr)
+plot(l_BR)
+
+# build exponential smoothing models
+# simple exponential smoothing (no trend)
+BR_es_1 <- HoltWinters(l_BR, beta = FALSE, gamma=FALSE)
+plot(BR_es_1)
+BR_es_1$SSE
+l_BR_forecasts_1 <- forecast.HoltWinters(BR_es_1, h=12)
+plot.forecast(l_BR_forecasts_1)
+rmse.es_1 <- sqrt(mean((log(train.te$Bankruptcy_Rate) - l_BR_forecasts_1$mean)^2))
+rmse.es_1
+
+# double exponential smoothing (with trend)
+BR_es_2 <- HoltWinters(l_BR, gamma=FALSE)
+plot(BR_es_2)
+BR_es_2$SSE
+l_BR_forecasts_2 <- forecast.HoltWinters(BR_es_2, h=12)
+plot.forecast(l_BR_forecasts_2)
+rmse.es_2 <- sqrt(mean((log(train.te$Bankruptcy_Rate) - l_BR_forecasts_2$mean)^2))
+rmse.es_2
+
+# triple exponential smoothing fails because the time series l_BR has no or less than 2 periods
+# BR_es_3 <- HoltWinters(l_BR)
+
+```
+
+The simple exponential smoothing has lower RMSE but it makes constant predictions for the 12 predicted periods. The double exponential smoothing incorporates a trend component when make predictions yet yields a larger RMSE which is also larger than most of the SARIMA models we built. 
